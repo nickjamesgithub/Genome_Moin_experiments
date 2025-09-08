@@ -11,17 +11,37 @@ out_tsr   = Path(r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\casewor
 plot_path = Path(r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\casework\AIA\Insurance_data\genome_embeddings_gwp3y_roe_hurdle.png")
 out_full  = Path(r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\casework\AIA\Insurance_data\merged_insurance_data_with_genome.csv")
 
+# -------- Country filter (configure here) --------
+# Leave empty [] to disable. Example list shown; edit to your needs.
+FILTERED_COUNTRIES = [
+    'Hong Kong', 'China', 'Hong Kong/China',
+    'Singapore', 'Japan', 'India', 'South Korea', 'Thailand',
+    'Australia', 'Vietnam', 'Malaysia', 'Indonesia'
+]
+
 # -------- Load & year filter --------
 df_ = pd.read_csv(in_path)
 
-# Ensure Year numeric on the raw frame, so merge keys align later
+# Year numeric…
 if "Year" in df_.columns:
     df_["Year"] = pd.to_numeric(df_["Year"], errors="coerce").astype("Int64")
 
-# Optional: coerce string join keys to consistent dtype to avoid mismatches
+# Coerce join keys
 for k in ["Company_name", "Type", "Home_Country"]:
     if k in df_.columns:
         df_[k] = df_[k].astype("string")
+
+# -------- Optional: restrict to specific Home_Country values --------
+if FILTERED_COUNTRIES and "Home_Country" in df_.columns:
+    keep = {c.strip().casefold() for c in FILTERED_COUNTRIES}
+    hc_norm = df_["Home_Country"].astype("string").str.strip().str.casefold()
+    before_n = len(df_)
+    df_ = df_.loc[hc_norm.isin(keep)].copy()
+    after_n = len(df_)
+    print(f"Applied Home_Country filter: kept {after_n:,} of {before_n:,} rows "
+          f"across {sorted(FILTERED_COUNTRIES)}")
+elif "Home_Country" not in df_.columns:
+    print("Warning: 'Home_Country' column not found — skipping country filter.")
 
 # Filtered/engineered working frame
 df = df_.loc[(df_["Year"] >= 2012) & (df_["Year"] <= 2023)].copy()

@@ -3,6 +3,10 @@
 Flexible TSR window + MEDIAN top-quartile coordinates with TSR appended.
 - File: merged_insurance_data_with_genome.csv
 - TSR window: [START_YEAR, END_YEAR] => annualized
+- Optional pre-filters:
+    * HOME_COUNTRY_FILTER: keep only these Home_Country values (case-insensitive)
+    * TYPE_FILTER:         keep only these Type values (case-insensitive)
+    * ONLY_INSURANCE:      if True, left-merge Global_data.csv and keep Sector == "Insurance"
 - Outputs (saved to /reports next to merged CSV):
     1) insurer_{span}y_tsr_ranked_{tag}.csv
     2) median_coords_top_quartile_overall_{tag}.csv  (adds Median_TSR_{span}y)
@@ -20,6 +24,20 @@ merged_path = Path(r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\casew
 out_dir     = merged_path.parent / "reports"
 out_dir.mkdir(parents=True, exist_ok=True)
 
+# Optional: merge in Global_data to restrict to Sector == "Insurance"
+ONLY_INSURANCE   = False  # set True to enable the merge + filter
+GLOBAL_DATA_PATH = r"C:\Users\60848\OneDrive - Bain\Desktop\Genome_code_250605\Genome-pipeline-code\Genome-pipeline-code\global_platform_data\Global_data.csv"
+
+# ========= Filters (EDIT THESE) =========
+# Examples:
+# HOME_COUNTRY_FILTER = ["United States", "Japan", "Australia"]
+TYPE_FILTER         = ["Life", "Multiline", "P&C"]
+HOME_COUNTRY_FILTER: list[str] = ['Hong Kong', 'China', 'Hong Kong/China',
+       'Singapore', 'Japan', 'India', 'South Korea', 'Thailand',
+       'Australia', 'Vietnam', 'Malaysia', 'Indonesia']   # leave empty => keep all
+TYPE_FILTER: list[str] = []           # leave empty => keep all
+# =======================================
+
 # ========= Window (EDIT THESE TWO ONLY) =========
 START_YEAR = 2014
 END_YEAR   = 2024
@@ -31,11 +49,11 @@ SPAN_LABEL  = f"{PERIOD_YEARS}y"
 TAG         = f"{START_YEAR}_{END_YEAR}"
 
 # ========= Outputs =========
-rank_csv           = out_dir / f"insurer_{SPAN_LABEL}_tsr_ranked_{TAG}.csv"
-median_overall_csv = out_dir / f"median_coords_top_quartile_overall_{TAG}.csv"
-median_by_type_csv = out_dir / f"median_coords_top_quartile_by_type_{TAG}.csv"
-median_by_home_csv = out_dir / f"median_coords_top_quartile_by_home_country_{TAG}.csv"
-median_tsr_home_all_csv = out_dir / f"median_tsr_by_home_country_all_{TAG}.csv"
+rank_csv                 = out_dir / f"insurer_{SPAN_LABEL}_tsr_ranked_{TAG}.csv"
+median_overall_csv       = out_dir / f"median_coords_top_quartile_overall_{TAG}.csv"
+median_by_type_csv       = out_dir / f"median_coords_top_quartile_by_type_{TAG}.csv"
+median_by_home_csv       = out_dir / f"median_coords_top_quartile_by_home_country_{TAG}.csv"
+median_tsr_home_all_csv  = out_dir / f"median_tsr_by_home_country_all_{TAG}.csv"
 
 # ========= Helpers =========
 def pick(df, *cands):
@@ -57,6 +75,20 @@ def ann_return(start_px: float, end_px: float, years: int) -> float:
 def first_scalar(series: pd.Series) -> float:
     s = pd.to_numeric(series, errors="coerce").dropna()
     return s.iloc[0] if not s.empty else np.nan
+
+def normalize_str(s: pd.Series) -> pd.Series:
+    """Lower + strip for case-insensitive matching, preserves NA."""
+    return s.astype("string").str.strip().str.lower()
+
+def apply_list_filter(df: pd.DataFrame, col: str, keep_values: list[str]) -> pd.DataFrame:
+    """Case-insensitive filter. Empty list => no filtering."""
+    if not keep_values or col not in df.columns:
+        return df
+    # normalize
+    df_norm = df.copy()
+    df_norm[col] = normalize_str(df_norm[col])
+    want = pd.Series(keep_values, dtype="string").str.strip().str.lower()
+    return df.loc[df_norm[col].isin(set(want))].copy()
 
 # ========= Load =========
 df = pd.read_csv(merged_path).replace([np.inf, -np.inf], np.nan)
@@ -81,6 +113,25 @@ if pbv_col is None:
         df["Price_to_book"] = pd.to_numeric(df[mktcap], errors="coerce") / pd.to_numeric(df[bve], errors="coerce")
         pbv_col = "Price_to_book"
 
+# ========= OPTIONAL: merge Global_data to restrict to Sector == "Insurance" =========
+if ONLY_INSURANCE:
+    try:
+        global_data = pd.read_csv(GLOBAL_DATA_PATH)
+        id_col_global = pick(global_data, "Ticker_full", "Ticker", "Company_name")
+        if id_col is None or id_col_global is None:
+            raise KeyError("Could not find a common ID column to merge on.")
+        cols_to_pull = [id_col_global, "Sector"] if "Sector" in global_data.columns else [id_col_global]
+        df = df.merge(global_data[cols_to_pull], left_on=id_col, right_on=id_col_global, how="left")
+        if "Sector" in df.columns:
+            df = df[df["Sector"].astype("string").str.strip().str.lower() == "insurance"].copy()
+        # Clean up merge key if created
+        if id_col_global in df.columns and id_col_global != id_col:
+            df.drop(columns=[id_col_global], inplace=True, errors="ignore")
+    except FileNotFoundError:
+        print(f"[WARN] Global_data file not found at: {GLOBAL_DATA_PATH}. Continuing without Sector filter.")
+    except Exception as e:
+        print(f"[WARN] Skipped Sector filter due to: {e}")
+
 # ========= Coercions =========
 df[year_col] = pd.to_numeric(df[year_col], errors="coerce").astype("Int64")
 for c in [id_col, name_col, type_col, home_col]:
@@ -93,6 +144,13 @@ for c in [roe_col, hurdle_col, gwp3y_col, pbv_col, adj_px_col]:
 
 if roe_col:
     df[roe_col] = to_decimal(df[roe_col])
+
+# ========= APPLY LIST FILTERS (before windowing) =========
+if HOME_COUNTRY_FILTER and home_col:
+    df = apply_list_filter(df, home_col, HOME_COUNTRY_FILTER)
+
+if TYPE_FILTER and type_col:
+    df = apply_list_filter(df, type_col, TYPE_FILTER)
 
 # ========= Restrict to the window =========
 w = df[df[year_col].between(START_YEAR, END_YEAR)].copy()
@@ -157,8 +215,8 @@ if not tsr_nonan.empty:
     top_rows = w[w[id_col].astype("string").isin(top_tickers)].copy()
 
     # Overall medians
-    med_x_all = pd.to_numeric(top_rows[gwp3y_col], errors="coerce").median(skipna=True) if gwp3y_col else np.nan
-    med_y_all = pd.to_numeric(top_rows[roe_col],    errors="coerce").median(skipna=True) if roe_col    else np.nan
+    med_x_all   = pd.to_numeric(top_rows[gwp3y_col], errors="coerce").median(skipna=True) if gwp3y_col else np.nan
+    med_y_all   = pd.to_numeric(top_rows[roe_col],    errors="coerce").median(skipna=True) if roe_col    else np.nan
     med_tsr_all = rank.loc[rank["Ticker"].astype("string").isin(top_tickers), tsr_col].median(skipna=True)
 
     pd.DataFrame([{
@@ -219,7 +277,7 @@ else:
     pd.DataFrame(columns=["Home_Country","Median_GWP_growth_3y","Median_ROE_BCN",f"Median_TSR_{SPAN_LABEL}","N_rows_used"]).to_csv(median_by_home_csv, index=False)
 
 # ========= Median TSR by Home_Country (all insurers, not just top quartile) =========
-if home_col:
+if "Home_Country" in rank.columns:
     med_tsr_home_all = (
         rank.dropna(subset=[tsr_col])
             .groupby("Home_Country")[tsr_col]
