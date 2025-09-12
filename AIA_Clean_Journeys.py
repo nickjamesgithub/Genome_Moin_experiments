@@ -288,6 +288,7 @@ if make_plots:
         plt.xlabel("Angle (degrees)")
         plt.ylabel("Annualized TSR (CapIQ)")
         plt.title(f"Annualized TSR vs Angle — Journey: {journey}")
+        plt.savefig("AIA_Clean_TSR_Angle")
         plt.grid(True)
         plt.show()
 
@@ -310,7 +311,7 @@ if make_plots:
         journey_medians[journey] = median_tsr
     plt.xlabel("Annualized TSR % (CapIQ)")
     plt.ylabel("Density")
-    plt.title("AIA_Insurance_Distribution_TSR_by_Journey")
+    plt.title("AIA_Clean_Insurance_Distribution_TSR_by_Journey")
     plt.grid(True)
     for journey, color in journey_colors.items():
         plt.axvline(journey_medians[journey], linestyle='--', color=color, alpha=0.7,

@@ -1,14 +1,18 @@
-# --- Imports ---
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.ensemble import RandomForestRegressor
+# ====== FILTER CONFIG AT THE VERY TOP ======
+# Pick ONE mode or provide a custom list
+UNIVERSE_MODE = "asia"   # options: all | asia | non_asia | developed | emerging | asia_developed | asia_emerging | non_asia_developed | non_asia_emerging
+UNIVERSE_CUSTOM = []          # e.g., ["USA", "Australia", "Japan"] — used only if UNIVERSE_MODE == "custom"
 
-# --- Load data ---
-stacked = pd.read_csv(r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\casework\AIA\Clean\Clean_insurance_data_genome_gpt.csv")
+# Insurer Type filter
+#   TYPE_MODE = "all"        -> no filter
+#   TYPE_MODE = "pc"         -> keep only P&C
+#   TYPE_MODE = "life"       -> keep only Life
+#   TYPE_MODE = "multiline"  -> keep only Multiline
+#   TYPE_MODE = "custom"     -> keep any types listed in TYPE_CUSTOM (e.g., ["P&C","Life"])
+TYPE_MODE = "pc"
+TYPE_CUSTOM = []   # used only if TYPE_MODE == "custom"
 
-# ====== Country groups & universe selector ======
-
+# ====== Country groups ======
 asia = [
     "Hong_Kong", "Japan", "South_Korea", "Singapore", "Taiwan",
     "China", "India", "Thailand", "Vietnam", "Malaysia", "Indonesia",
@@ -29,10 +33,6 @@ emerging = [
     "China", "India", "Thailand", "Vietnam", "Malaysia", "Indonesia",
     "Saudi_Arabia", "Poland"
 ]
-
-# Pick ONE mode or provide a custom list
-UNIVERSE_MODE = "all"   # options: all | asia | non_asia | developed | emerging | asia_developed | asia_emerging | non_asia_developed | non_asia_emerging
-UNIVERSE_CUSTOM = []     # e.g., ["USA", "Australia", "Japan"] — used only if UNIVERSE_MODE == "custom"
 
 def resolve_universe(mode: str):
     mode = (mode or "").lower()
@@ -58,33 +58,6 @@ def resolve_universe(mode: str):
         return sets["non_asia"] & sets["emerging"]
     raise ValueError(f"Unknown UNIVERSE_MODE: {mode}")
 
-# === Apply region filter ===
-_universe = resolve_universe(UNIVERSE_MODE)
-if _universe is None:  # "all"
-    print("Using ALL countries (no filtering).")
-else:
-    before_n = len(stacked)
-    stacked = stacked[stacked["Country"].isin(_universe)].copy()
-    after_n = len(stacked)
-    if after_n == 0:
-        raise ValueError(
-            f"No rows left after filtering for mode='{UNIVERSE_MODE}' with countries={sorted(_universe)}.\n"
-            "Check Country spellings (e.g., 'United_Kingdom', 'Hong_Kong')."
-        )
-    kept_counts = stacked["Country"].value_counts().to_dict()
-    print(f"Filtered mode='{UNIVERSE_MODE}': {after_n}/{before_n} rows. Breakdown: {kept_counts}")
-
-# ====== NEW: Insurer Type filter (works like Universe Mode) ======
-
-# Options:
-#   TYPE_MODE = "all"        -> no filter
-#   TYPE_MODE = "pc"         -> keep only P&C
-#   TYPE_MODE = "life"       -> keep only Life
-#   TYPE_MODE = "multiline"  -> keep only Multiline
-#   TYPE_MODE = "custom"     -> keep any types listed in TYPE_CUSTOM (e.g., ["P&C","Life"])
-TYPE_MODE = "pc"
-TYPE_CUSTOM = []   # used only if TYPE_MODE == "custom"
-
 def _norm_type_label(x: str) -> str:
     if not isinstance(x, str):
         return x
@@ -98,12 +71,10 @@ def _norm_type_label(x: str) -> str:
         return "Multiline"
     return x  # leave unchanged if not matched
 
-def resolve_types(mode: str):
+def resolve_types(mode: str, df_columns=None):
     mode = (mode or "").lower()
-    if "Type_of_Insurer" not in stacked.columns:
+    if df_columns is not None and "Type_of_Insurer" not in df_columns:
         raise KeyError("Type_of_Insurer column not found. Make sure you added it in the previous step.")
-    # normalized view of what's present
-    present = stacked["Type_of_Insurer"].dropna().map(_norm_type_label)
     valid = {"P&C", "Life", "Multiline"}
     if mode == "all":
         return None
@@ -121,7 +92,33 @@ def resolve_types(mode: str):
         return custom_norm
     raise ValueError(f"Unknown TYPE_MODE: {mode}")
 
-_type_set = resolve_types(TYPE_MODE)
+# --- Imports ---
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestRegressor
+
+# --- Load data ---
+stacked = pd.read_csv(r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\casework\AIA\Clean\Clean_insurance_data_genome_gpt.csv")
+
+# === Apply region filter ===
+_universe = resolve_universe(UNIVERSE_MODE)
+if _universe is None:  # "all"
+    print("Using ALL countries (no filtering).")
+else:
+    before_n = len(stacked)
+    stacked = stacked[stacked["Country"].isin(_universe)].copy()
+    after_n = len(stacked)
+    if after_n == 0:
+        raise ValueError(
+            f"No rows left after filtering for mode='{UNIVERSE_MODE}' with countries={sorted(_universe)}.\n"
+            "Check Country spellings (e.g., 'United_Kingdom', 'Hong_Kong')."
+        )
+    kept_counts = stacked["Country"].value_counts().to_dict()
+    print(f"Filtered mode='{UNIVERSE_MODE}': {after_n}/{before_n} rows. Breakdown: {kept_counts}")
+
+# ====== Insurer Type filter ======
+_type_set = resolve_types(TYPE_MODE, df_columns=stacked.columns)
 if _type_set is None:
     print("Using ALL insurer types (no type filtering).")
 else:
@@ -243,5 +240,5 @@ plt.title("TSR Insurance Drivers")
 plt.xlabel("Importance")
 plt.ylabel("Feature")
 plt.tight_layout()
-plt.savefig("TSR_Insurance_Drivers.png", dpi=150)
+plt.savefig("AIA_Clean_TSR_Insurance_Drivers.png", dpi=150)
 plt.show()
