@@ -18,9 +18,8 @@ year_grid = np.linspace(beginning_year, end_year, end_year - beginning_year + 1,
 rolling_window = 3
 
 # ===== Load INSURANCE file =====
-stacked = pd.read_csv(
-    r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\casework\AIA\Clean\Clean_insurance_data_genome_country.csv"
-)
+# stacked = pd.read_csv(r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\casework\AIA\Clean\Clean_insurance_data_genome_country.csv")
+stacked = pd.read_csv(r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\casework\AIA\Clean\Clean_insurance_data_250925.csv")
 
 # Filter scope
 countries_to_include = [
@@ -36,7 +35,7 @@ sectors_to_include = [
 
 # Use the same variable name as your original script after filtering
 data = stacked.loc[
-    stacked["Country"].isin(countries_to_include) & stacked["Sector"].isin(sectors_to_include)
+    stacked["Country_label"].isin(countries_to_include) & stacked["Sector"].isin(sectors_to_include)
 ].copy()
 
 # Derived feature
@@ -44,7 +43,7 @@ data["Price_to_Book"] = data["Market_Capitalisation"] / data["Book_Value_Equity"
 
 # Features to slice
 features = [
-    "Company_name","Country","Sector","Year","TSR","Revenue_growth_3_f","Stock_Price","Adjusted_Stock_Price",
+    "Company_name","Country_label","Sector","Year","TSR","Revenue_growth_3_f","Stock_Price","Adjusted_Stock_Price",
     "DPS","BBPS","DBBPS","Genome_classification_bespoke","Price_to_Book","PE_Implied","Market_Capitalisation",
     "Revenue","Debt_to_equity","RD/Revenue","EVA_ratio_bespoke","ROE_above_Cost_of_equity","CROTE_TE",
     "Cash_acquisitions","NPAT_per_employee","CAPEX/Revenue","Gross_margin"
@@ -115,7 +114,7 @@ for i in range(len(year_grid) - rolling_window):
             company_info = df_slice_i_2
             company_name_j = company_info["Company_name"].values[0]
             sector_j = df_slice_i["Sector"].values[0]
-            country_j = df_slice_i["Country"].values[0]
+            country_j = df_slice_i["Country_label"].values[0]
 
             # Ranges
             df_slice_company_range_i = data.loc[
@@ -226,7 +225,7 @@ for i in range(len(year_grid) - rolling_window):
 df_journey_collapsed = pd.DataFrame(df_list)
 df_journey_collapsed.columns = [
     "Journey","Genome_classification_bespoke_beginning","Genome_classification_bespoke_end",
-    "Company_name","Ticker","Country","Sector","Year_beginning","Year_final",
+    "Company_name","Ticker","Country_label","Sector","Year_beginning","Year_final",
     "Revenue_growth_beginning","Revenue_growth_end","EVA_beginning","EVA_end",
     "ROE_above_Cost_of_equity_beginning","ROE_above_Cost_of_equity_end",
     "CROTE_TE_beginning","CROTE_TE_end",
@@ -268,7 +267,7 @@ print("Built df_journey_collapsed:", df_journey_collapsed.shape)
 print(df_journey_collapsed.head(3))
 
 # Write out csv file locally
-df_journey_collapsed.to_csv(r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\casework\AIA\Clean\Journeys_summary_Global_FE_Update.csv")
+df_journey_collapsed.to_csv(r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\casework\AIA\Clean\AIA_Journeys_summary_Global_FE_Update.csv")
 
 # ----------------- Plots (optional) -----------------
 if make_plots:

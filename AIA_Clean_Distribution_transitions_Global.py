@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
 # Load data
-df = pd.read_csv(r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\casework\AIA\Clean\Journeys_summary_Global_FE_Update.csv")
+df = pd.read_csv(r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\casework\AIA\Clean\AIA_Journeys_summary_Global_FE_Update.csv")
 
 # Step 1: Filter for Banking sector
 df_insurance = df[(df["Sector"] == "Insurance") & (df["Year_final"]<=2025)]
@@ -64,7 +64,7 @@ combined = pd.concat([
 # Group and calculate mean TSR by country
 tsr_by_country = (
     combined
-    .groupby(['Country', 'Group'])['Annualized_TSR_Capiq']
+    .groupby(['Country_label', 'Group'])['Annualized_TSR_Capiq']
     .mean()
     .unstack()
     .sort_index()
