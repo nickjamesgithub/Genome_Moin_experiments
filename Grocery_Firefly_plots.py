@@ -12,10 +12,13 @@ excel_output = True
 data = pd.read_csv(r"C:\Users\60848\OneDrive - Bain\Desktop\Project_Genome\global_platform_data\grocery_data.csv")
 
 # Full ticker list and corresponding start/end years
-full_ticker_list = ["NASDAQGS:COST", "NASDAQGS:CASY", "NYSE:WM", "NASDAQGS:AMZN"]
-start_years = [2019, 2019, 2019, 2019]
-end_years = [2025, 2025, 2025, 2025]
-plot_label = "Grocery_leaders"
+# full_ticker_list = ["NASDAQGS:COST", "NASDAQGS:CASY", "NYSE:WM"]
+# full_ticker_list = ["TSE:3038", "NASDAQGS:COST"]
+full_ticker_list = ["TSX:ATD"]
+# full_ticker_list = ["LSE:TSCO", "ENXTPA:CA"]
+start_years = [2019]
+end_years = [2025]
+plot_label = "Alimentation_Couche_Tart"
 
 # Extract company names before looping
 company_name_list = [data.loc[data["Ticker_full"] == ticker, "Company_name"].iloc[0] for ticker in full_ticker_list]

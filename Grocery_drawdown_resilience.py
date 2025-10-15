@@ -4,6 +4,14 @@ import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_absolute_error
+from datetime import datetime
+
+# Optional dependency for SHAP — the code will handle absence gracefully
+try:
+    import shap  # pip install shap
+    _HAS_SHAP = True
+except Exception as _e:
+    _HAS_SHAP = False
 
 # ================== PATHS ==================
 BASE   = Path(r"C:\\Users\\60848\\OneDrive - Bain\\Desktop\\Project_Genome\\global_platform_data\\share_price\\Grocery")
@@ -52,10 +60,14 @@ for p in price_files:
     except Exception:
         continue
 
+if not frames:
+    raise RuntimeError("No valid price files found under BASE. Check your path/pattern.")
+
 prices = pd.concat(frames, ignore_index=True)
 
 # ================== PEAK-TO-TROUGH DRAWDOWN ==================
 g = prices.dropna(subset=["Date","Price"]).sort_values(["Ticker_base","Date"]).copy()
+# rebase to the *first* observation per ticker
 g["idx100"] = g.groupby("Ticker_base")["Price"].transform(lambda s: s / s.iloc[0] * 100)
 
 # log drawdown on idx100 (safe)
@@ -164,10 +176,38 @@ fi.rename("importance").to_csv(OUTDIR / "drawdown_model_feature_importances.csv"
 # --- Plot (feature importances) ---
 plt.figure(figsize=(8,5))
 plt.barh(fi.index, fi.values)
-plt.title("Retail equity drawdown resilience")
+plt.title("Retail equity drawdown resilience — feature importance")
 plt.xlabel("Relative Importance")
 plt.tight_layout()
+plt.savefig(OUTDIR / "feature_importances.png", dpi=200)
 plt.show()
+
+# ================== SHAPLEY (BEESWARM) PLOT ==================
+if _HAS_SHAP:
+    try:
+        # Some tree models (like RF) can violate SHAP additivity slightly; disable check to avoid warnings
+        explainer = shap.TreeExplainer(rf)
+        shap_values = explainer.shap_values(X_train, check_additivity=False)
+
+        # Classic beeswarm
+        shap.summary_plot(shap_values, X_train, plot_type="dot", show=False)
+        plt.title("SHAP Beeswarm — drivers of drawdown")
+        plt.tight_layout()
+        plt.savefig(OUTDIR / "shap_beeswarm.png", dpi=220)
+        plt.show()
+
+        # Export per-feature mean |SHAP| for tabular review
+        try:
+            mean_abs = np.abs(shap_values).mean(axis=0)
+            pd.Series(mean_abs, index=X_train.columns, name="mean_abs_shap") \
+              .sort_values(ascending=False) \
+              .to_csv(OUTDIR / "shap_mean_abs_feature_impact.csv")
+        except Exception:
+            pass
+    except Exception as e:
+        print("SHAP failed to compute beeswarm:", e)
+else:
+    print("SHAP not installed. To enable beeswarm: pip install shap")
 
 # ================== SAVE PREDICTIONS ==================
 df.assign(predicted_drawdown_pct=rf.predict(X)).to_csv(
@@ -205,8 +245,39 @@ if win_list:
     plt.xlabel("12 months around equity trough (days)")
     plt.ylabel("Index (start of window = 100)")
     plt.tight_layout()
+    plt.savefig(OUTDIR / "equity_drawdowns_window.png", dpi=200)
     plt.show()
 else:
     print("No sufficient windowed data to plot around troughs.")
 
+# ================== EQUITIES FROM 2020-01-01 TO CURRENT DATE (SEPARATE PLOT) ==================
+start_2020 = pd.Timestamp("2020-01-01")
+today = pd.Timestamp.today().normalize()  # current date (local machine)
+sub = g[g["Date"] >= start_2020].copy()
+
+if sub.empty:
+    print("No data on/after 2020-01-01 to plot.")
+else:
+    # Rebase each ticker to its first available observation in/after 2020-01-01
+    sub["base2020"] = sub.groupby("Ticker_base")["idx100"].transform(lambda s: s.iloc[0] if len(s) else np.nan)
+    sub["idx2020"] = np.where(sub["base2020"].to_numpy()!=0,
+                              sub["idx100"] / sub["base2020"] * 100.0, np.nan)
+
+    plt.figure(figsize=(10,6))
+    uniq = sub["Ticker_base"].nunique()
+    for tkr, sd in sub.groupby("Ticker_base"):
+        plt.plot(sd["Date"], sd["idx2020"], linewidth=1, alpha=0.9 if uniq <= 12 else 0.7)
+    plt.title(f"Equities since 2020-01-01 to {today.date()} (rebased to 100 at first point in window)")
+    plt.xlabel("Date")
+    plt.ylabel("Index (2020 window start = 100)")
+    if uniq <= 15:
+        plt.legend(sorted(sub["Ticker_base"].unique()), fontsize=8, ncol=2, frameon=False)
+    plt.tight_layout()
+    plt.savefig(OUTDIR / "equities_since_2020.png", dpi=220)
+    plt.show()
+
 print("All outputs saved to:", OUTDIR)
+
+
+x=1
+y=2

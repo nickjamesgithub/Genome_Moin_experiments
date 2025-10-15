@@ -15,13 +15,13 @@ tickers = ["WM","AMZN","COST","TGT","KR","ACI","BJ","SFM","GO","WMK","IMKT.A","C
            "D01","OV8"]
 
 # --- Subset (2015–2024 & tickers) ---
-df_sel = df[df["Year"].between(2015, 2024) & df["Ticker"].isin(tickers)]
+df_sel = df[df["Year"].between(2019, 2024) & df["Ticker"].isin(tickers)]
 
 # --- Pivot helper (handles duplicates via mean) ---
 def piv(metric):
     cols = [t for t in tickers if t in df_sel["Ticker"].unique()]
     return (df_sel.pivot_table(index="Year", columns="Ticker", values=metric, aggfunc="mean")
-                 .reindex(range(2015, 2025))
+                 .reindex(range(2019, 2025))
                  [cols])
 
 # --- L1 distance over overlapping years (ignores NaNs) ---
